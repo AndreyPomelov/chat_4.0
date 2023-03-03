@@ -1,22 +1,17 @@
 package com.example.client;
 
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
 import javafx.stage.Stage;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
 import java.net.URL;
 import java.util.ResourceBundle;
-
-import static constants.Constants.*;
-import static constants.Commands.*;
 
 /**
  * Контроллер окна чата.
@@ -36,32 +31,55 @@ public class ChatController implements Initializable {
     public TextField messageField;
 
     /**
-     * Клиентский сокет.
-     * Инициализируется при помощи запроса на серверный сокет сервера.
+     * Форма авторизации.
      */
-    private Socket socket;
+    @FXML
+    public HBox authForm;
 
     /**
-     * Входящий поток данных для приёма сообщений от сервера.
+     * Поле для ввода логина.
      */
-    private DataInputStream in;
+    @FXML
+    public TextField loginField;
 
     /**
-     * Исходящий поток данных для отправки сообщений на сервер.
+     * Поле для ввода пароля.
      */
-    private DataOutputStream out;
+    @FXML
+    public PasswordField passwordField;
+
+    /**
+     * Форма отправки сообщений.
+     */
+    @FXML
+    public HBox messageForm;
+
+    /**
+     * Экземпляр доставщика сообщений с сервера.
+     */
+    private Messenger messenger;
+
+    /**
+     * Метод, автоматически вызываемый при старте приложения.
+     * Отдаёт фокус полю ввода сообщения,
+     * затем инициализирует экземпляр доставщика для работы с сервером.
+     */
+    @Override
+    public void initialize(URL url, ResourceBundle resourceBundle) {
+        Platform.runLater(() -> messageArea.requestFocus());
+        messenger = new Messenger(this);
+        setAuthenticated(false);
+    }
 
     /**
      * Отправка введённого сообщения на сервер.
-     *
-     * @param actionEvent экземпляр события нажатия на клавишу
      */
     @FXML
-    public void sendMessage(ActionEvent actionEvent) {
+    public void sendMessage() {
         String message = messageField.getText();
         messageField.clear();
         try {
-            out.writeUTF(message);
+            messenger.sendMessage(message);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -69,60 +87,41 @@ public class ChatController implements Initializable {
     }
 
     /**
-     * Метод, автоматически вызываемый при старте приложения.
-     * Отдаёт фокус полю ввода сообщения, затем соединяется с сервером.
+     * Попытка авторизации.
      */
-    @Override
-    public void initialize(URL url, ResourceBundle resourceBundle) {
-        Platform.runLater(() -> messageField.requestFocus());
-
-        // Работу с сервером выполняем в отдельном потоке,
-        // чтобы поток отрисовки окна приложения не зависал.
-        new Thread(() -> {
-            try {
-                connect();
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    // Игнорируем ошибку закрытия сокета.
-                }
-                // Закрываем окно приложения.
-                Platform.runLater(() -> ((Stage) messageArea.getScene().getWindow()).close());
-            }
-        }).start();
+    @FXML
+    public void tryToAuth() {
+        String login = loginField.getText();
+        String password = passwordField.getText();
+        passwordField.clear();
+        try {
+            messenger.tryToAuthorise(login, password);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
-     * Соединение с сервером и инициализация потоков ввода-вывода,
-     * запуск режима приёма сообщений.
+     * Изменение параметров окна в зависимости от состояния авторизации пользователя.
+     * Авторизован:     отображаем форму отправки сообщения
+     *                  скрываем форму авторизации
+     *                  очищаем область вывода сообщений
+     * Не авторизован:  скрываем форму отправки сообщения
+     *                  отображаем форму авторизации
+     *                  отображаем "Chat" в заголовке окна вместо ника
      *
-     * @throws IOException ошибка ввода-вывода.
+     * @param authenticated состояние авторизации пользователя: true, если авторизован
      */
-    private void connect() throws IOException {
-        socket = new Socket(IP_ADDRESS, PORT);
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
-        receive();
-    }
+    public void setAuthenticated(boolean authenticated) {
+        messageForm.setVisible(authenticated);
+        messageForm.setManaged(authenticated);
+        authForm.setVisible(!authenticated);
+        authForm.setManaged(!authenticated);
 
-    /**
-     * Приём сообщений от сервера.
-     *
-     * @throws IOException ошибка ввода-вывода.
-     */
-    private void receive() throws IOException {
-        while (true) {
-            String message = in.readUTF();
-
-            // Если пришла команда на отключение, прерываем цикл приёма сообщений.
-            if (EXIT.equals(message)) {
-                break;
-            }
-
-            addMessage(message);
+        if (authenticated) {
+            Platform.runLater(() -> messageArea.clear());
+        } else {
+            setWindowTitle("Chat");
         }
     }
 
@@ -131,7 +130,27 @@ public class ChatController implements Initializable {
      *
      * @param message добавляемое сообщение.
      */
-    private void addMessage(String message) {
+    public void addMessage(String message) {
         messageArea.appendText(message + "\n");
+    }
+
+    /**
+     * Установка заголовка окна приложения.
+     *
+     * @param title текст заголовка окна.
+     */
+    public void setWindowTitle(String title) {
+        Platform.runLater(() -> ((Stage) messageArea.getScene().getWindow()).setTitle(title));
+    }
+
+    /**
+     * Переинициализация доставщика сообщений.
+     * Т.к. доставщик работает в отдельном потоке,
+     * и уже отработавший поток мы не можем запустить заново,
+     * то нам необходим новый доставщик для каждой новой
+     * сессии подключения клиента к серверу.
+     */
+    public void resetMessenger() {
+        messenger = new Messenger(this);
     }
 }
