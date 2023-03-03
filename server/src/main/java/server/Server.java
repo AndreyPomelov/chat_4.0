@@ -1,5 +1,8 @@
 package server;
 
+import server.authentication.AuthService;
+import server.authentication.SimpleAuthService;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.ArrayList;
@@ -51,10 +54,11 @@ public class Server {
     private void runServer() throws IOException {
         server = new ServerSocket(PORT);
         System.out.printf("Сервер успешно запущен, порт %d.\n", PORT);
+        AuthService authService = new SimpleAuthService();
 
         // Цикл подключения клиентов (для каждого клиента создаётся свой экземпляр менеджера)
         while (true) {
-            ClientManager client = new ClientManager(server.accept(), this);
+            ClientManager client = new ClientManager(server.accept(), this, authService);
             System.out.println(client + "успешно подключен.");
         }
     }

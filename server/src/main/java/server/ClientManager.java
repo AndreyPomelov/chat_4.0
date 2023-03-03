@@ -1,11 +1,13 @@
 package server;
 
+import server.authentication.AuthService;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
-import static constants.Commands.EXIT;
+import static constants.Commands.*;
 
 /**
  * Менеджер клиента.
@@ -40,16 +42,23 @@ public class ClientManager extends Thread {
     private final DataOutputStream OUT;
 
     /**
+     * Сервис авторизации.
+     */
+    private final AuthService AUTH_SERVICE;
+
+    /**
      * Конструктор.
      * При создании экземпляра менеджера он автоматически запускается в новом потоке.
      *
      * @param socket        клиентский сокет.
      * @param server        экземпляр сервера.
+     * @param authService   сервис авторизации.
      * @throws IOException  ошибка ввода-вывода.
      */
-    public ClientManager(Socket socket, Server server) throws IOException {
+    public ClientManager(Socket socket, Server server, AuthService authService) throws IOException {
         this.SOCKET = socket;
         this.SERVER = server;
+        this.AUTH_SERVICE = authService;
         IN = new DataInputStream(socket.getInputStream());
         OUT = new DataOutputStream(socket.getOutputStream());
         this.start();
@@ -80,6 +89,29 @@ public class ClientManager extends Thread {
      * @throws IOException ошибка ввода-вывода.
      */
     private void work() throws IOException {
+        String nickname;
+
+        // Цикл авторизации
+        while (true) {
+            String message = IN.readUTF();
+
+            // Обработка запроса на авторизацию.
+            if (message.startsWith(AUTH)) {
+                String[] messageParts = message.split(" ");
+                String login = messageParts[1];
+                String password = messageParts[2];
+                nickname = AUTH_SERVICE.getNickname(login, password);
+
+                // Если никнейм - null, значит авторизация неудачна.
+                if (nickname == null) {
+                    OUT.writeUTF(AUTH_DENIED);
+                } else {
+                    OUT.writeUTF(String.format("%s %s", AUTH_OK, nickname));
+                    break;
+                }
+            }
+        }
+
         // Подписываем клиента на рассылку сообщений.
         SERVER.subscribe(this);
 
@@ -98,7 +130,7 @@ public class ClientManager extends Thread {
             }
 
             // Рассылаем сообщение всем клиентам.
-            SERVER.broadcastMessage(message);
+            SERVER.broadcastMessage(String.format("[%s]: %s", nickname, message));
         }
     }
 

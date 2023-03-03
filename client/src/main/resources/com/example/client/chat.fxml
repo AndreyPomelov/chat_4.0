@@ -8,18 +8,28 @@
 <?import javafx.scene.layout.VBox?>
 
 <!--Родительский контейнер для всего содержимого окна.
-    Содержит область вывода сообщений и дочерний контейнер.-->
+    Содержит область вывода сообщений и два дочерних контейнера.-->
+<?import javafx.scene.control.PasswordField?>
 <VBox alignment="CENTER" spacing="20.0" xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.example.client.ChatController">
     <padding>
         <Insets bottom="20.0" left="20.0" right="20.0" top="20.0"/>
     </padding>
 
+    <!--Дочерний контейнер. Содержит поля для ввода логина и пароля и кнопку для входа.
+        Отображается только в том случае, если пользователь не авторизован.-->
+    <HBox fx:id="authForm" spacing="20">
+        <TextField fx:id="loginField" promptText="Введите логин" HBox.hgrow="ALWAYS"/>
+        <PasswordField fx:id="passwordField" promptText="Введите пароль" HBox.hgrow="ALWAYS"/>
+        <Button text="Войти" onAction="#tryToAuth"/>
+    </HBox>
+
     <!--Область вывода сообщений. Ввод текста в данную область запрещён.-->
     <TextArea fx:id="messageArea" editable="false" VBox.vgrow="ALWAYS"/>
 
-    <!--Дочерний контейнер. Содержит поле ввода сообщения и кнопку для его отправки.-->
-    <HBox spacing="20.0">
+    <!--Дочерний контейнер. Содержит поле ввода сообщения и кнопку для его отправки.
+        Отображается только в том случае, если пользователь авторизован.-->
+    <HBox fx:id="messageForm" spacing="20.0" visible="false" managed="false">
         <TextField fx:id="messageField" promptText="Введите сообщение" onAction="#sendMessage" HBox.hgrow="ALWAYS"/>
         <Button text="Отправить" onAction="#sendMessage"/>
     </HBox>
